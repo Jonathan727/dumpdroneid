@@ -13,11 +13,11 @@
 
 #include "opendroneid.h"
 
-#define MAX_UAVS    20
+#define MAX_UAVS     20
 #define ASTERIX      0
 #define VERIFY       0
 #define NRF_SNIFFER  0
-#define ID_FRANCE    1
+#define ID_FRANCE    0
 #define FA_EXPORT    1
 
 #define ID_OD_AUTH_DATUM  1546300800LU
