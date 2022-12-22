@@ -64,7 +64,7 @@ static double  base_lat = 52.0 + (46.0 / 60.0) + (49.89 / 3600.0),
 
 int fa_export(time_t secs,struct UAV_RID *RID_data) {
 
-  int                uav, j, alt, speed, heading, seen, rssi = -50;
+  int                uav, j, alt_geo, alt_baro, alt_agl, speed, heading, seen, rssi = -50;
   char               filename[128];
   double             mach;
   unsigned long int  total;
@@ -153,10 +153,13 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         fprintf(output, " \"hex\":\"~%02x:%02x:%02x:%02x:%02x:%02x\"",
                 RID_data[uav].mac[0],RID_data[uav].mac[1],RID_data[uav].mac[2],
                 RID_data[uav].mac[3],RID_data[uav].mac[4],RID_data[uav].mac[5]);
+        fprintf(output,", \"type\":\"other\"");
         fprintf(output,", \"flight\":\"%s\"",RID_data[uav].odid_data.BasicID->UASID);
-        fprintf(output,", \"squawk\":\"%04d\"",SQUAWK);
+        // fprintf(output,", \"squawk\":\"%04d\"",SQUAWK);
 
-        alt     = (int) (RID_data[uav].odid_data.Location.AltitudeGeo     * 3.28084); /* m   -> ft */
+        alt_geo  = (int) (RID_data[uav].odid_data.Location.AltitudeGeo     * 3.28084); /* m   -> ft */
+        alt_baro = (int) (RID_data[uav].odid_data.Location.AltitudeBaro    * 3.28084); /* m   -> ft */
+        alt_agl  = (int) (RID_data[uav].odid_data.Location.Height    * 3.28084); /* m   -> ft */ //TODO: check Height Type
         speed   = (int) (RID_data[uav].odid_data.Location.SpeedHorizontal * 1.94384); /* m/s -> knots */
         mach    = RID_data[uav].odid_data.Location.SpeedHorizontal / 300.0;
         seen    = (int) (secs - RID_data[uav].last_rx);
@@ -166,9 +169,9 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
           heading -= 360;
         }
         
-        fprintf(output,", \"alt_baro\":%d, \"alt_geom\":%d, \"nav_altitude\":%d",alt,alt,alt);
+        fprintf(output,", \"alt_geom\":%d, \"alt_baro\":%d",alt_geo,alt_agl);//change to alt_baro with alt_ago failback
         fprintf(output,", \"gs\":%d, \"ias\":%d, \"tas\":%d, \"mach\":%.3f",speed,speed,speed,mach);
-        fprintf(output,", \"track\":%d, \"nav_heading\":%d",heading,heading);
+        fprintf(output,", \"track\":%d, \"true_heading\":%d",heading,heading);
         fprintf(output,", \"lat\":%.6f, \"lon\":%.6f",
                 RID_data[uav].odid_data.Location.Latitude,
                 RID_data[uav].odid_data.Location.Longitude);
