@@ -41,8 +41,8 @@
 
 #include "rid_capture.h"
 
-#define FA_HISTORY    0
-#define SQUAWK     7000 // UK VFR is 7000
+#define FA_HISTORY    1
+#define SQUAWK     1200 // UK VFR is 7000
 
 /*
  *
@@ -150,8 +150,10 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
 
         fputs("    {",output);
  
-        fprintf(output, " \"hex\":\"%06x\"",uav + 1);
-        fprintf(output,", \"flight\":\"G-UAV%d\"",uav + 1);
+        fprintf(output, " \"hex\":\"~%02x:%02x:%02x:%02x:%02x:%02x\"",
+                RID_data[uav].mac[0],RID_data[uav].mac[1],RID_data[uav].mac[2],
+                RID_data[uav].mac[3],RID_data[uav].mac[4],RID_data[uav].mac[5]);
+        fprintf(output,", \"flight\":\"%s\"",RID_data[uav].odid_data.BasicID->UASID);
         fprintf(output,", \"squawk\":\"%04d\"",SQUAWK);
 
         alt     = (int) (RID_data[uav].odid_data.Location.AltitudeGeo     * 3.28084); /* m   -> ft */
