@@ -27,7 +27,14 @@ You need a WiFi card/dongle that can be put into monitor mode. If you are using 
 
 ### Compile rid_capture
 
-Install libpcap-dev. Make sure that all the options at the top of `rid_capture.h` are set to 0 and type make. It may make things easier later on if you edit the default device name near the top of `rid_capture.c` to match your installation.
+Install `libpcap-dev`.
+
+```shell
+sudo apt-get install libpcap-dev
+```
+
+Make sure that all the options at the top of `rid_capture.h` are set to 0 and type `make`. It may make things easier later on if you edit the default device name near the top of `rid_capture.c` to match your installation.
+
 
 ### Running rid_capture
 
