@@ -87,7 +87,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
   sprintf(filename,"%s/aircraft.json",fa_dir);
 
 #if FA_HISTORY
-  int  old_hist = 0;
+  long int  old_hist = 0;
   char filename2[128];
 
   if ((secs - last_history) >= 1) {
@@ -96,7 +96,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
 
     if ((old_hist = (next_history - FA_HISTORY)) >= 0)  {
     
-      sprintf(filename2,"%s/history_%d.json",fa_dir,old_hist);
+      sprintf(filename2,"%s/history_%ld.json",fa_dir,old_hist);
       unlink(filename2);
     }
 
