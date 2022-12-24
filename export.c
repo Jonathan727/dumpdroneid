@@ -90,7 +90,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
   long int  old_hist = 0;
   char filename2[128];
 
-  if ((secs - last_history) >= 1) {
+  if ((secs - last_history) > 1) {
 
     last_history = secs;
 
