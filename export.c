@@ -171,7 +171,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         
         fprintf(output,", \"alt_geom\":%d, \"alt_baro\":%d",alt_geo,alt_agl);//change to alt_baro with alt_ago failback
         fprintf(output,", \"gs\":%d, \"ias\":%d, \"tas\":%d, \"mach\":%.3f",speed,speed,speed,mach);
-        fprintf(output,", \"track\":%d, \"true_heading\":%d",heading,heading);
+        fprintf(output,", \"track\":%d",heading);
         fprintf(output,", \"lat\":%.6f, \"lon\":%.6f",
                 RID_data[uav].odid_data.Location.Latitude,
                 RID_data[uav].odid_data.Location.Longitude);
