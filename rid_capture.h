@@ -14,7 +14,7 @@
 #include "opendroneid.h"
 
 /* BLE, choose one. */
-#define BLUEZ_SNIFFER  1 /* Linux standard Bluetooth stack. */
+#define BLUEZ_SNIFFER  0 /* Linux standard Bluetooth stack. */
 #define NRF_SNIFFER    0 /* nRF52840 dongle running nRF's sniffer program. */
 
 /* WiFi */
