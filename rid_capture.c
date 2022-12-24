@@ -1079,7 +1079,7 @@ int write_json(char *json) {
 
   } else {
 
-    printf(json);
+    printf("%s", json);
   }
 
   return 0;
