@@ -25,7 +25,7 @@ exit_on_error() {
 # see https://github.com/aircrack-ng/rtl8812au
 # see https://wireless.wiki.kernel.org/en/users/documentation/iw
 
-use_ifconfig=no
+use_ifconfig=${use_ifconfig:=no}
 
 if [ $# -eq 0 ]
   then
