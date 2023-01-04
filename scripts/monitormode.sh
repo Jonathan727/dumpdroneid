@@ -21,6 +21,10 @@ exit_on_error() {
     exit $exit_code
 }
 
+# for some reason, using ifconfig/iwconfig results in very poor packet performance on the rtl8812au
+# see https://github.com/aircrack-ng/rtl8812au
+# see https://wireless.wiki.kernel.org/en/users/documentation/iw
+
 use_ifconfig=no
 
 if [ $# -eq 0 ]
@@ -34,23 +38,26 @@ if [ $# -eq 0 ]
     exit 0
 fi
 
-#for some reason, using ifconfig/iwconfig results in very poor packet performance on the rtl8812au
-# see https://github.com/aircrack-ng/rtl8812au
-# see https://wireless.wiki.kernel.org/en/users/documentation/iw
+if [ "$(id -u)" != "0" ]; then
+    echo -e "\033[33m"
+    echo "This script must be run using sudo or as root."
+    echo -e "\033[37m"
+    exit 1
+fi
 
 if [[ $use_ifconfig == yes ]]
   then
     echo "using ifconfig/iwconfig"
-    sudo ifconfig $1 down
-    sudo iwconfig $1 mode monitor
-    sudo ifconfig $1 up
-    sudo iwconfig $1 channel 6
+    ifconfig $1 down
+    iwconfig $1 mode monitor
+    ifconfig $1 up
+    iwconfig $1 channel 6
   else
     echo "using ip/iw"
-    sudo ip link set $1 down
-    sudo iw dev $1 set type monitor
-    sudo ip link set $1 up
-    sudo iw dev $1 set channel 6 HT20 || sudo iw dev $1 set channel 6
+    ip link set $1 down
+    iw dev $1 set type monitor
+    ip link set $1 up
+    iw dev $1 set channel 6 HT20 || iw dev $1 set channel 6
 fi
     
 
