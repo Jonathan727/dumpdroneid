@@ -50,7 +50,7 @@ if [[ $use_ifconfig == yes ]]
     sudo ip link set $1 down
     sudo iw dev $1 set type monitor
     sudo ip link set $1 up
-    sudo iw dev $1 set channel 6
+    sudo iw dev $1 set channel 6 HT20 || sudo iw dev $1 set channel 6
 fi
     
 
