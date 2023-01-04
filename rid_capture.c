@@ -597,6 +597,7 @@ void list_devices(char *errbuf) {
 void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *packet) {
 
   int            i, offset = 36, length, typ, len;
+  int8_t         *rssi;
   char           ssid_tmp[32], text[128];
   u_char        *payload, *val, mac[6];
   u_int16_t     *radiotap_len; 
@@ -611,6 +612,8 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
   
   length       = header->len;
   radiotap_len = (u_int16_t *) &packet[2];
+
+  rssi = (int8_t *) &packet[14];
 
   if (*radiotap_len < length) {
     
@@ -653,7 +656,7 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
           (val[1] == 0x0b)&&
           (val[2] == 0xbc)) {
 
-        parse_odid(mac,&payload[offset + 6],length - offset - 6,0);
+        parse_odid(mac,&payload[offset + 6],length - offset - 6,*rssi);
  
       } else if ((typ    == 0xdd)&&
                  (val[0] == oui_alliance[0])&& // WiFi Alliance
@@ -872,6 +875,13 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
     write_json(json);
 
     memcpy(&RID_data[RID_index].odid_data.System,&UAS_data.System,sizeof(ODID_System_data));
+  }
+
+  if (1) {
+
+    sprintf(json,", \"rssi\" : \"%i\"",rssi);
+    write_json(json);
+
   }
 
   if (UAS_data.SelfIDValid) {
