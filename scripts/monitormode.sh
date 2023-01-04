@@ -31,10 +31,14 @@ if [ $# -eq 0 ]
   then
     #Just output current devices
     echo "No Device Specified - Showing Current Wireless Config"
-    #iwconfig
-    ip link show
-    iw dev
-    #iw list
+    if [[ $use_ifconfig == yes ]]
+      then
+        iwconfig
+      else
+        ip link show
+        iw dev
+        #iw list
+    fi
     exit 0
 fi
 
