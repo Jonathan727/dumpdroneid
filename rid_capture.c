@@ -436,7 +436,7 @@ int main(int argc,char *argv[]) {
   }
 #else
   if (enable_display) {
-    fputs("Option requires compilation with USE_CURSES", stderr);
+    fputs("Option requires compilation with USE_CURSES\n", stderr);
   }
 #endif
 
