@@ -1,5 +1,7 @@
 # runtime data output
 /data
+#rid_capture debug file
+debug.txt
 
 # build output
 /rid_capture
@@ -17,6 +19,7 @@ compile_commands.json
 CTestTestfile.cmake
 _deps
 cmake-build*
+.cmake
 
 # Prerequisites
 *.d
