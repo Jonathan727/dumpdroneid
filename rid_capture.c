@@ -434,6 +434,10 @@ int main(int argc,char *argv[]) {
       refresh();
     }
   }
+#else
+  if (enable_display) {
+    fputs("Option requires compilation with USE_CURSES", stderr);
+  }
 #endif
 
   sprintf(text,"{ \"setup_time_ms\" : %.0f }\n",setup_ms);
