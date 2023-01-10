@@ -10,13 +10,13 @@ set(VERSION 0.95)
 
 #
 # Use the bluez library.
-set(bluez_sniffer 1)
+set(bluez_sniffer 0)
 # Or use an nRF sniffer.
 set(nrf_sniffer 0)
 # Use the pcap library.
 set(enable_pcap 1)
 # Handle French beacon IDs.
-set(id_france 1)
+set(id_france 0)
 # Create a FlightAware aircraft.json output file. 
 set(fa_export 1)
 #
