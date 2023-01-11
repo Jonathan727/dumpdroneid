@@ -5,6 +5,8 @@ debug.txt
 
 # build output
 /rid_capture
+/bluez_sniffer
+/nrf_sniffer
 
 # Cmake
 CMakeLists.txt.user
