@@ -101,7 +101,8 @@ static struct UAV_RID     RID_data[MAX_UAVS];
 static struct sockaddr_in server;
 #if ENABLE_PCAP
 static int                header_type = 0;
-static const char        *filter_text = "ether broadcast or ether dst 51:6f:9a:01:00:00 ";
+//static const char        *filter_text = "ether broadcast or ether dst 51:6f:9a:01:00:00 ";
+static const char        *filter_text = "type mgt subtype beacon";
 #endif
 #if BLUEZ_SNIFFER
 static int                ble_sniffer = -1;
@@ -662,7 +663,7 @@ void list_devices(char *errbuf) {
     fprintf(stderr,"%d: %s\n",i,dev->name);
   }
 
-  pcap_freealldevs(devices);  
+  pcap_freealldevs(devices);
   
   return;
 }
