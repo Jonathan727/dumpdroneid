@@ -695,7 +695,7 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
   //Then, we have to get the version and check if it's radiotap (It should be equal to 0)
   if (radiotapHeader->it_version == 0) {
     //We define now the radiotap iterator that will walk through the radiotap args (defined in radiotap_iter.h)
-    struct ieee80211_radiotap_iterator *radiotapIterator;
+    struct ieee80211_radiotap_iterator *radiotapIterator = NULL;
     //We should now create and initialize this iterator (pcap_pkthdr is a struct inside pcap.h included in pcap.cpp)
     int failure = ieee80211_radiotap_iterator_init(radiotapIterator, radiotapHeader, header->caplen, NULL);
     if (!failure) {
