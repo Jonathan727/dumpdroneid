@@ -172,9 +172,9 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         seen    = (int) (secs - RID_data[uav].last_rx);
         rssi    = (RID_data[uav].rssi) ? RID_data[uav].rssi: -50;
 
-        if ((heading = (int) (RID_data[uav].odid_data.Location.Direction)) > 180) {
-          heading -= 360;
-        }
+        // if ((heading = (int) (RID_data[uav].odid_data.Location.Direction)) > 180) {
+          // heading -= 360;
+        // }
 
         speed_h = (RID_data[uav].odid_data.Location.SpeedHorizontal < (float) INV_SPEED_H) ?
                   (int) (RID_data[uav].odid_data.Location.SpeedHorizontal * 1.94384):      /* m/s -> knots */
@@ -197,7 +197,14 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
 
         fprintf(output,", \"geom_rate\":%d",speed_v);
         fprintf(output,", \"gs\":%d, \"ias\":%d, \"tas\":%d, \"mach\":%.3f",speed_h,speed_h,speed_h,mach);
-        fprintf(output,", \"track\":%d",heading);
+        // fprintf(output,", \"track\":%d",heading);
+
+        if (RID_data[uav].odid_data.Location.Direction < INV_DIR) {
+
+          fprintf(output,", \"track\":%d",
+                  (int) (RID_data[uav].odid_data.Location.Direction));
+        }
+
         fprintf(output,", \"lat\":%.6f, \"lon\":%.6f",
                 RID_data[uav].odid_data.Location.Latitude,
                 RID_data[uav].odid_data.Location.Longitude);
