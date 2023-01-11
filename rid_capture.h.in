@@ -46,17 +46,6 @@ struct UAV_RID {u_char        mac[6], counter[16];
                 int           rssi;
 };
 
-struct ieee80211_header
-{
-    u_short frame_control;
-    u_short frame_duration;
-    u_char address1[6];
-    u_char address2[6];
-    u_char address3[6];
-    u_short sequence_control;
-    u_char address4[6];
-};
-
 void  parse_odid(u_char *,u_char *,int,int);
 int   mac_index(uint8_t *,struct UAV_RID *);
 void  dump(char *,uint8_t *,int);
