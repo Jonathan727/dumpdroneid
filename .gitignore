@@ -2,6 +2,8 @@
 /data
 #rid_capture debug file
 debug.txt
+#generated library makefile
+/radiotap-library/Makefile
 
 # build output
 /rid_capture
