@@ -59,6 +59,8 @@
 
 #if ENABLE_PCAP
 #include <pcap/pcap.h>
+#include "radiotap-library/radiotap_iter.h"
+#include "radiotap-library/radiotap.h"
 #endif
 
 #if USE_CURSES
@@ -673,7 +675,9 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
   int8_t         *rssi;
   char           ssid_tmp[32], text[128];
   u_char        *payload, *val, mac[6];
-  u_int16_t     *radiotap_len; 
+  u_int16_t     *radiotap_len;
+  struct ieee80211_radiotap_header *radiotapHeader;
+  struct ieee80211_header *wifiHeader;
   static u_char  nan_cluster[6]  = {0x50, 0x6f, 0x9a, 0x01, 0x00, 0xff},
                  nan_service[6]  = {0x88, 0x69, 0x19, 0x9d, 0x92, 0x09},
                  oui_alliance[3] = {0x50, 0x6f, 0x9a};
@@ -682,14 +686,49 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
   ssid_tmp[32] = 0;
 
   ++rx_packets;
-  
+
   length       = header->len;
   radiotap_len = (u_int16_t *) &packet[2];
+
+  radiotapHeader = (struct ieee80211_radiotap_header *) packet;
+
+  //Then, we have to get the version and check if it's radiotap (It should be equal to 0)
+  if (radiotapHeader->it_version == 0) {
+    //We define now the radiotap iterator that will walk through the radiotap args (defined in radiotap_iter.h)
+    struct ieee80211_radiotap_iterator *radiotapIterator;
+    //We should now create and initialize this iterator (pcap_pkthdr is a struct inside pcap.h included in pcap.cpp)
+    int failure = ieee80211_radiotap_iterator_init(radiotapIterator, radiotapHeader, header->caplen, NULL);
+    if (!failure) {
+      //Now, we have to define a variable for the wifi header using the ieee80211_header (defined in defines.h file)
+      //The wifi header is in the bytes packet after the radioTap Header. That's why we add the length of it to bytes.
+      wifiHeader = (struct ieee80211_header *) (packet + radiotapIterator->_max_length);
+      //It should be a Beacon frame : IEEE80211_STYPE_BEACON 0x0080
+      if (wifiHeader->frame_control == 0x0080) {
+        //We can get the source address which is the second 6 bytes address in the wifi header.
+//        string sourceAddress = mac2string(wifiHeader->address2);
+        int radioTapRssi;
+        int antennaIndex;
+        //Now, we iterate through all the args. 0 for success.
+        while (ieee80211_radiotap_iterator_next(radiotapIterator) == 0) {
+          //The RSSI Value is the Antenna signal, it's in dbm and it is defines as IEEE80211_RADIOTAP_DB_ANTSIGNAL = 12 in radiotap.h
+          if (radiotapIterator->this_arg_index == IEEE80211_RADIOTAP_DB_ANTSIGNAL) {
+            radioTapRssi = ((int) *(radiotapIterator->this_arg));
+          }
+          //The Antenna index is the Antenna, it is defines as IEEE80211_RADIOTAP_ANTENNA = 11 in radiotap.h
+          if (radiotapIterator->this_arg_index == IEEE80211_RADIOTAP_DB_ANTSIGNAL) {
+            antennaIndex = ((int) *(radiotapIterator->this_arg));
+          }
+        }
+        rssi = (int8_t *) &radioTapRssi;
+      }
+    }
+
+  }
 
   rssi = (int8_t *) &packet[14];
 
   if (*radiotap_len < length) {
-    
+
     payload = (u_char *)  &packet[*radiotap_len];
 
   } else {
