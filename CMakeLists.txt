@@ -72,7 +72,10 @@ endif()
 
 if(${enable_pcap})
   set(rcap_libraries pcap ${rcap_libraries})
+  set(rcap_libraries radiotap ${rcap_libraries})
 endif()
+
+add_subdirectory(radiotap-library)
 
 set(rid_capture_source ${rid_capture_source} opendroneid.c)
 
