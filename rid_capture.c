@@ -388,7 +388,7 @@ int main(int argc,char *argv[]) {
             header_type);
   }
   
-  if (pcap_compile(session,&filter,filter_text,0,network)) {
+  if (pcap_compile(session,&filter,filter_text,1,network)) {
 
     fprintf(stderr,"pcap_compile(): \"%s\" : %s\n",filter_text,pcap_geterr(session));
   }
