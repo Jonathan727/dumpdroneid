@@ -358,6 +358,11 @@ int main(int argc,char *argv[]) {
 
 #endif
 
+  if (pcap_set_timeout(session,1000)) {
+
+    fprintf(stderr,"pcap_set_timeout():  %s\n",pcap_geterr(session));
+  }
+
   if (i = pcap_activate(session)) {
 
     fprintf(stderr,"\npcap_activate():  %s, %s\n",
