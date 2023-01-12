@@ -512,6 +512,9 @@ int main(int argc,char *argv[]) {
     if ((secs - last_export) > 1) {
 
       last_export = secs;
+#if FA_EXPORT
+      fa_export(secs,RID_data);
+#endif
 
       switch (export_index) {
 
@@ -523,9 +526,6 @@ int main(int argc,char *argv[]) {
 
       case 1:
       case 3:
-#if FA_EXPORT
-        fa_export(secs,RID_data);
-#endif
         break;
 
       case 2:
