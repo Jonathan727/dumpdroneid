@@ -3,6 +3,7 @@
   <component name="VcsDirectoryMappings">
     <mapping directory="" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/opendroneid-core-c" vcs="Git" />
+    <mapping directory="$PROJECT_DIR$/opendroneid-core-c/mavlink_c_library_v2" vcs="Git" />
     <mapping directory="$PROJECT_DIR$/radiotap-library" vcs="Git" />
   </component>
 </project>
