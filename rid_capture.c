@@ -27,8 +27,8 @@
  *
  * To Do
  *
- * Sort out the hangs that can occur if there is no data being received.
- * Fully setup the WiFi device.
+ * 1) Sort out the hangs that can occur if there is no data being received.
+ * 2) Fully setup the WiFi device.
  *
  */
 
@@ -59,6 +59,21 @@
 
 #if ENABLE_PCAP
 #include <pcap/pcap.h>
+#include "radiotap-library/radiotap_iter.h"
+#include "radiotap-library/radiotap.h"
+//https://docs.kernel.org/next/networking/radiotap-headers.html
+//#include <net/cfg80211.h>
+#endif
+
+#if USE_CURSES
+#include <curses.h>
+#define MAC_COL          0
+#define OP_COL          18
+#define LAT_COL         38
+#define LONG_COL        50
+#define ALT_COL         62
+#define TS_L_COL        70
+#define TS_S_COL        76
 #endif
 
 #define BUFFER_SIZE   2048
@@ -69,12 +84,14 @@ uid_t                     nobody  = 0;
 gid_t                     nogroup = 0;
 const mode_t              file_mode = 0666, dir_mode = 0777;
 
-static int                enable_udp = 0, json_socket = -1;
+static int                enable_display = 0, enable_udp = 0, json_socket = -1;
+static double             setup_ms = 0.0, loop_us = 0.0;
 static unsigned int       port = 32001;
 static volatile int       end_program  = 0;
 static FILE              *debug_file = NULL;
 static const char         default_key[]    = "0123456789abcdef",
                           default_iv[]     = "nopqrs",
+                          default_server[] = "127.0.0.1",
                           debug_filename[] = "debug.txt",
                           device_pi[]      = "wlan1",
                           device_i686[]    = "wlp5s0b1",
@@ -84,7 +101,8 @@ static struct UAV_RID     RID_data[MAX_UAVS];
 static struct sockaddr_in server;
 #if ENABLE_PCAP
 static int                header_type = 0;
-static const char        *filter_text = "ether broadcast or ether dst 51:6f:9a:01:00:00 ";
+//static const char        *filter_text = "ether broadcast or ether dst 51:6f:9a:01:00:00 ";
+static const char        *filter_text = "type mgt subtype beacon";
 #endif
 #if BLUEZ_SNIFFER
 static int                ble_sniffer = -1;
@@ -92,6 +110,10 @@ static const char         device_bluez[] = "hci0";
 #elif NRF_SNIFFER
 static int                nrf_pipe = -1;
 static const char         device_nrf[] = "/dev/ttyACM0";
+#endif
+#if USE_CURSES
+static int                nrows = 20, ncols = 80;
+WINDOW                   *window = NULL;
 #endif
 
 #if ENABLE_PCAP
@@ -109,10 +131,11 @@ int main(int argc,char *argv[]) {
 
   int                 i, j, set_monitor = 1, man_dev = 0, key_len, iv_len, status,
                       export_index = 0;
-  char               *arg, *wifi_name, *ble_name, text[128];
+  char               *arg, *wifi_name, *ble_name, *udp_server, text[128];
   u_char              message[16];
   uid_t               uid;
   time_t              secs, last_debug = 0, last_export = 0;
+  struct timespec     start, setup_done, loop_entry, last_loop;
 #if ENABLE_PCAP
   char                errbuf[PCAP_ERRBUF_SIZE];
   pcap_t             *session = NULL;
@@ -126,6 +149,8 @@ int main(int argc,char *argv[]) {
   u_char              nrf_buffer[16];
   pid_t               nrf_child;
 #endif
+
+  clock_gettime(CLOCK_REALTIME,&start);
 
   if (user = getpwnam("nobody")) {
     nobody  = user->pw_uid; 
@@ -143,11 +168,12 @@ int main(int argc,char *argv[]) {
   memcpy(key,default_key,sizeof(default_key));
   memcpy(iv, default_iv, sizeof(default_iv));
 
-  wifi_name = (char *) dummy;
+  udp_server = (char *) default_server;
+  wifi_name  = (char *) dummy;
 #if BLUEZ_SNIFFER
-  ble_name  = (char *) device_bluez;
+  ble_name   = (char *) device_bluez;
 #elif NRF_SNIFFER
-  ble_name  = (char *) device_nrf;
+  ble_name   = (char *) device_nrf;
 #endif
 
 #if DEBUG_FILE
@@ -180,7 +206,11 @@ int main(int argc,char *argv[]) {
           ble_name = argv[i];
         }
         break;
-    
+
+      case 'd': /* Curses display */
+        enable_display = 1;
+        break;
+
       case 'k': /* key */
         if (++i < argc) {
           strncpy((char *) key,argv[i],MAX_KEY_LEN);
@@ -199,6 +229,12 @@ int main(int argc,char *argv[]) {
             port = j;
           }
         }
+
+      case 's': /* UDP server */
+        if (++i < argc) {
+          udp_server = argv[i];
+        }
+        break;
 
       case 'u': /* UDP output. */
         enable_udp = 1;
@@ -236,7 +272,7 @@ int main(int argc,char *argv[]) {
   }
 
   if (enable_udp) {
-    fprintf(stderr," -p %u",port);
+    fprintf(stderr," -p %u -s %s",port,udp_server);
   }
 
   fprintf(stderr,"\n%s %s\n",sys_uname.sysname,sys_uname.machine);
@@ -252,7 +288,7 @@ int main(int argc,char *argv[]) {
       memset(&server,0,sizeof(server));
       server.sin_family = AF_INET;
       server.sin_port   = htons(port);
-      inet_aton("127.0.0.1",&server.sin_addr);
+      inet_aton(udp_server,&server.sin_addr);
     }
     
 #if 0
@@ -283,9 +319,7 @@ int main(int argc,char *argv[]) {
   if (!(session = pcap_create(wifi_name,errbuf))) {
 
     fprintf(stderr,"pcap_open_live(): %s\n",errbuf);
-
     list_devices(errbuf);
-
     exit(1);
   }
 
@@ -299,9 +333,7 @@ int main(int argc,char *argv[]) {
   if ((status = pcap_can_set_rfmon(session)) != 0) {
 
     fprintf(stderr,"pcap_can_set_rfmon(): cannot set rfmon (%d), aborting\n",status);
-
     pcap_close(session);
-    
     exit(1);
   }
 
@@ -326,6 +358,11 @@ int main(int argc,char *argv[]) {
 
 #endif
 
+  if (pcap_set_timeout(session,1000)) {
+
+    fprintf(stderr,"pcap_set_timeout():  %s\n",pcap_geterr(session));
+  }
+
   if (i = pcap_activate(session)) {
 
     fprintf(stderr,"\npcap_activate():  %s, %s\n",
@@ -342,7 +379,6 @@ int main(int argc,char *argv[]) {
 
     fputs("\n",stderr);
     list_devices(errbuf);
-
     exit(1);
   }
 
@@ -352,7 +388,7 @@ int main(int argc,char *argv[]) {
             header_type);
   }
   
-  if (pcap_compile(session,&filter,filter_text,0,network)) {
+  if (pcap_compile(session,&filter,filter_text,1,network)) {
 
     fprintf(stderr,"pcap_compile(): \"%s\" : %s\n",filter_text,pcap_geterr(session));
   }
@@ -376,6 +412,11 @@ int main(int argc,char *argv[]) {
   time(&secs);
   last_debug = secs;
 
+  clock_gettime(CLOCK_REALTIME,&setup_done);
+
+  setup_ms = ((double) setup_done.tv_sec * 1e3 + (double) setup_done.tv_nsec * 1e-6) -
+             ((double) start.tv_sec      * 1e3 + (double) start.tv_nsec      * 1e-6);
+
 #if ENABLE_PCAP
   if (header_type != DLT_IEEE802_11_RADIO) {
 
@@ -387,9 +428,42 @@ int main(int argc,char *argv[]) {
   }
 #endif
 
+#if USE_CURSES
+  if (enable_display) {
+
+    if (window = initscr()) {
+      getmaxyx(window,nrows,ncols);
+      clear();
+      curs_set(0);
+      mvaddstr( 0,OP_COL   + 1,"Operator");
+      mvaddstr( 0,LAT_COL  + 1,"Lat.");
+      mvaddstr( 0,LONG_COL + 1,"Long.");
+      mvaddstr( 0,ALT_COL  + 1, "Alt.");
+      mvaddstr( 0,TS_L_COL + 2, "Timestamps");
+      mvaddstr(17,0,"^C to end program");
+      refresh();
+    }
+  }
+#else
+  if (enable_display) {
+    fputs("Option requires compilation with USE_CURSES\n", stderr);
+  }
+#endif
+
+  sprintf(text,"{ \"setup_time_ms\" : %.0f }\n",setup_ms);
+  write_json(text);
+
+  clock_gettime(CLOCK_REALTIME,&last_loop);
+
   /* Main loop. */
-	
+
   while (!end_program) {
+
+    clock_gettime(CLOCK_REALTIME,&loop_entry);
+    loop_us           = ((double) loop_entry.tv_sec * 1e6 + (double) loop_entry.tv_nsec * 1e-3) -
+                        ((double) last_loop.tv_sec  * 1e6 + (double) last_loop.tv_nsec  * 1e-3);
+    last_loop.tv_sec  = loop_entry.tv_sec;
+    last_loop.tv_nsec = loop_entry.tv_nsec;
 
 #if ENABLE_PCAP
     pcap_loop(session,1,packet_handler,message);
@@ -421,7 +495,8 @@ int main(int argc,char *argv[]) {
 
     if ((secs - last_debug) > 9) {
 
-      sprintf(text,"{ \"debug\" : \"rx packets %u (%u)\" }\n",rx_packets,odid_packets);
+      sprintf(text,"{ \"debug\" : \"rx packets %u (%u)\", \"loop_time_us\" : %.0f }\n",
+              rx_packets,odid_packets,loop_us);
       write_json(text);
       
       last_debug = secs;
@@ -437,6 +512,9 @@ int main(int argc,char *argv[]) {
     if ((secs - last_export) > 1) {
 
       last_export = secs;
+#if FA_EXPORT
+      fa_export(secs,RID_data);
+#endif
 
       switch (export_index) {
 
@@ -448,9 +526,6 @@ int main(int argc,char *argv[]) {
 
       case 1:
       case 3:
-#if FA_EXPORT
-        fa_export(secs,RID_data);
-#endif
         break;
 
       case 2:
@@ -468,6 +543,13 @@ int main(int argc,char *argv[]) {
 
   /* 
    */
+
+#if USE_CURSES
+  if (window) {
+
+    endwin();
+  }
+#endif
 
 #if BLUEZ_SNIFFER
   stop_bluez_sniffer();
@@ -496,10 +578,11 @@ int main(int argc,char *argv[]) {
   if (RID_data[0].mac[0]) {
 
 #if ASTERIX
-    fprintf(stderr,"\n\n%-17s packets %-10s %-10s operator\n","MAC","last rx","last retx");
+    fprintf(stderr,"\n\n%-17s packets %-10s %-10s ","MAC","last rx","last retx");
 #else
-    fprintf(stderr,"\n\n%-17s packets %-10s operator\n","MAC","last rx");
+    fprintf(stderr,"\n\n%-17s packets %-10s ","MAC","last rx");
 #endif
+    fprintf(stderr,"%-20s %-10s %-10s\n","operator","latitude","longitude");
 
     for (int i = 0; i < MAX_UAVS; ++i) {
 
@@ -510,14 +593,14 @@ int main(int argc,char *argv[]) {
                 RID_data[i].mac[3],RID_data[i].mac[4],RID_data[i].mac[5],
                 RID_data[i].packets);
 #if ASTERIX
-        fprintf(stderr,"%10lu %10lu %-20s ",
-                RID_data[i].last_rx,RID_data[i].last_retx,
-                RID_data[i].odid_data.OperatorID.OperatorId);
+        fprintf(stderr,"%10lu %10lu ",RID_data[i].last_rx,RID_data[i].last_retx);
 #else
-        fprintf(stderr,"%10lu %-20s ",
-                RID_data[i].last_rx,
-                RID_data[i].odid_data.OperatorID.OperatorId);
+        fprintf(stderr,"%10lu ",RID_data[i].last_rx);
 #endif
+        fprintf(stderr,"%-20s %10.5f %10.5f ",
+                RID_data[i].odid_data.OperatorID.OperatorId,
+                RID_data[i].odid_data.Location.Latitude,
+                RID_data[i].odid_data.Location.Longitude);
 #if VERIFY
         fputs(printable_text(RID_data[i].auth_buffer,RID_data[i].auth_length),stderr);
 #endif
@@ -585,7 +668,7 @@ void list_devices(char *errbuf) {
     fprintf(stderr,"%d: %s\n",i,dev->name);
   }
 
-  pcap_freealldevs(devices);  
+  pcap_freealldevs(devices);
   
   return;
 }
@@ -597,9 +680,13 @@ void list_devices(char *errbuf) {
 void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *packet) {
 
   int            i, offset = 36, length, typ, len;
+  int8_t         *rssi = NULL;
   char           ssid_tmp[32], text[128];
   u_char        *payload, *val, mac[6];
-  u_int16_t     *radiotap_len; 
+  u_int16_t     *radiotap_len;
+  struct ieee80211_radiotap_header *radiotapHeader;
+  struct ieee80211_header *wifiHeader;
+  struct ieee80211_radiotap_iterator *radiotapIterator;
   static u_char  nan_cluster[6]  = {0x50, 0x6f, 0x9a, 0x01, 0x00, 0xff},
                  nan_service[6]  = {0x88, 0x69, 0x19, 0x9d, 0x92, 0x09},
                  oui_alliance[3] = {0x50, 0x6f, 0x9a};
@@ -608,12 +695,59 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
   ssid_tmp[32] = 0;
 
   ++rx_packets;
-  
+
   length       = header->len;
   radiotap_len = (u_int16_t *) &packet[2];
 
+  //https://docs.kernel.org/next/networking/radiotap-headers.html
+
+    int pkt_rate_100kHz = 0, antenna = 0, pwr = 0;
+    struct ieee80211_radiotap_iterator iterator;
+    int ret = ieee80211_radiotap_iterator_init(&iterator, packet, header->caplen, NULL);
+
+    while (!ret) {
+
+        ret = ieee80211_radiotap_iterator_next(&iterator);
+
+        if (ret)
+            continue;
+
+        /* see if this argument is something we can use */
+
+        switch (iterator.this_arg_index) {
+            /*
+            * You must take care when dereferencing iterator.this_arg
+            * for multibyte types... the pointer is not aligned.  Use
+            * get_unaligned((type *)iterator.this_arg) to dereference
+            * iterator.this_arg for type "type" safely on all arches.
+            */
+            case IEEE80211_RADIOTAP_RATE:
+                /* radiotap "rate" u8 is in
+                * 500kbps units, eg, 0x02=1Mbps
+                */
+                pkt_rate_100kHz = (*iterator.this_arg) * 5;
+                break;
+
+            case IEEE80211_RADIOTAP_ANTENNA:
+                /* radiotap uses 0 for 1st ant */
+                antenna = *iterator.this_arg;
+                break;
+
+            case IEEE80211_RADIOTAP_DBM_TX_POWER:
+                pwr = *iterator.this_arg;
+                break;
+
+            case IEEE80211_RADIOTAP_DBM_ANTSIGNAL:
+                rssi = iterator.this_arg;
+                break;
+
+            default:
+                break;
+        }
+    }  /* while more rt headers */
+
   if (*radiotap_len < length) {
-    
+
     payload = (u_char *)  &packet[*radiotap_len];
 
   } else {
@@ -653,7 +787,7 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
           (val[1] == 0x0b)&&
           (val[2] == 0xbc)) {
 
-        parse_odid(mac,&payload[offset + 6],length - offset - 6,0);
+        parse_odid(mac,&payload[offset + 6],length - offset - 6,rssi == NULL ? 0 : *rssi);
  
       } else if ((typ    == 0xdd)&&
                  (val[0] == oui_alliance[0])&& // WiFi Alliance
@@ -744,6 +878,9 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
   uint8_t                   counter, index;
   ODID_UAS_Data             UAS_data;
   ODID_MessagePack_encoded *encoded_data = (ODID_MessagePack_encoded *) &payload[1];
+#if USE_CURSES
+  char                      text[64];
+#endif
 
   i = 0;
 
@@ -751,21 +888,22 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
 
   RID_index = mac_index(mac,RID_data);
 
-  ++RID_data[RID_index].packets;
-  RID_data[RID_index].rssi = rssi;
-
   /* Decode */
 
   counter = payload[0];
   index   = payload[1] >> 4;
 
+#if 1
   if (RID_data[RID_index].counter[index] == counter) {
     return;
   }
+#endif
 
   RID_data[RID_index].counter[index] = counter;
 
   ++odid_packets;
+  ++RID_data[RID_index].packets;
+  RID_data[RID_index].rssi = rssi;
 
   memset(&UAS_data,0,sizeof(UAS_data));
 
@@ -782,7 +920,7 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
     break;
 
   case 0x20:
-    page = payload[1] & 0x0f;
+    page = payload[2] & 0x0f;
     decodeAuthMessage(&UAS_data.Auth[page],(ODID_Auth_encoded *) &payload[1]);
     UAS_data.AuthValid[page] = 1;
     break;
@@ -808,11 +946,16 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
   }
   
   /* JSON */
-  
+
   sprintf(json,"{ \"mac\" : \"%02x:%02x:%02x:%02x:%02x:%02x\"",
           mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
   write_json(json);
-  
+
+#if 1
+  sprintf(json,", \"rssi\" : %d",rssi);
+  write_json(json);
+#endif
+
 #if 0
   sprintf(json,", \"debug\" : \"%d | ",length);
   write_json(json);
@@ -832,6 +975,13 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
     write_json(json);
 
     memcpy(&RID_data[RID_index].odid_data.OperatorID,&UAS_data.OperatorID,sizeof(ODID_OperatorID_data));
+#if USE_CURSES
+    if (window) {
+      sprintf(text,"%-20s",UAS_data.OperatorID.OperatorId);
+      mvaddstr(RID_index + 1,OP_COL,text);
+      refresh();
+    }
+#endif
   }
 
   if (UAS_data.BasicIDValid[0]) {
@@ -855,11 +1005,30 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
     sprintf(json,", \"uav altitude\" : %d, \"uav heading\" : %d",
            (int) UAS_data.Location.AltitudeGeo,(int) UAS_data.Location.Direction);
     write_json(json);
+#if 0
+    sprintf(json,", \"uav speed horizontal\" : %d, \"uav speed vertical\" : %d",
+           (int) UAS_data.Location.SpeedHorizontal,(int) UAS_data.Location.SpeedVertical);
+    write_json(json);
+#endif
     sprintf(json,", \"uav speed\" : %d, \"seconds\" : %d",
            (int) UAS_data.Location.SpeedHorizontal,(int) UAS_data.Location.TimeStamp);
     write_json(json);
 
     memcpy(&RID_data[RID_index].odid_data.Location,&UAS_data.Location,sizeof(ODID_Location_data));
+
+#if USE_CURSES
+    if (window) {
+      sprintf(text,"%11.6f ",UAS_data.Location.Latitude);
+      mvaddstr(RID_index + 1,LAT_COL,text);
+      sprintf(text,"%11.6f ",UAS_data.Location.Longitude);
+      mvaddstr(RID_index + 1,LONG_COL,text);
+      sprintf(text,"%5d ",(int) UAS_data.Location.AltitudeGeo);
+      mvaddstr(RID_index + 1,ALT_COL,text);
+      sprintf(text,"%4d ",(int) UAS_data.Location.TimeStamp);
+      mvaddstr(RID_index + 1,TS_L_COL,text);
+      refresh();
+    }
+#endif
   }
   
   if (UAS_data.SystemValid) {
@@ -872,6 +1041,21 @@ void parse_odid(u_char *mac,u_char *payload,int length,int rssi) {
     write_json(json);
 
     memcpy(&RID_data[RID_index].odid_data.System,&UAS_data.System,sizeof(ODID_System_data));
+
+#if USE_CURSES
+    if (window) {
+      sprintf(text,"%10u ",(int) UAS_data.System.Timestamp);
+      mvaddstr(RID_index + 1,TS_S_COL,text);
+      refresh();
+    }
+#endif
+  }
+
+  if (1) {
+
+    sprintf(json,", \"rssi\" : \"%i\"",rssi);
+    write_json(json);
+
   }
 
   if (UAS_data.SelfIDValid) {
@@ -953,6 +1137,7 @@ static void signal_handler(int sig) {
 int mac_index(uint8_t *mac,struct UAV_RID *RID_data) {
 
   int    i, RID_index = 0, oldest = 0;
+  char   text[64];
   time_t secs, oldest_secs;
 
   time(&secs);
@@ -984,18 +1169,28 @@ int mac_index(uint8_t *mac,struct UAV_RID *RID_data) {
 
     uav = &RID_data[oldest];
 
-    fprintf(stderr,"%02x:%02x:%02x:%02x:%02x:%02x - ",
+    sprintf(text,"%02x:%02x:%02x:%02x:%02x:%02x ",
             mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
 
-    if (uav->mac[0]) {
+#if USE_CURSES
+    if (window) {
+      mvaddstr(oldest + 1,MAC_COL,text);
+      refresh();
+    }
+#endif
+    if (!enable_display) {
 
-      fprintf(stderr,"reusing RID record %d (%02x:%02x:%02x:%02x:%02x:%02x)\n",oldest,
-              uav->mac[0],uav->mac[1],uav->mac[2],
-              uav->mac[3],uav->mac[4],uav->mac[5]);
+      fputs(text,stderr);
 
-    } else {
+      if (uav->mac[0]) {
 
-      fprintf(stderr,"using RID record %d\n",oldest);
+        fprintf(stderr," - reusing RID record %d (%02x:%02x:%02x:%02x:%02x:%02x)\n",oldest,
+                uav->mac[0],uav->mac[1],uav->mac[2],
+                uav->mac[3],uav->mac[4],uav->mac[5]);
+      } else {
+
+        fprintf(stderr," - using RID record %d\n",oldest);
+      }
     }
 
     RID_index        = oldest;
@@ -1064,22 +1259,53 @@ char *printable_text(uint8_t *data,int len) {
  *
  */
 
+#define UDP_BUFFER_SIZE 500
+
 int write_json(char *json) {
 
-  int status, l;
+  int            status;
+#if UDP_BUFFER_SIZE
+  static int     index = 0;
+  static uint8_t udp_buffer[UDP_BUFFER_SIZE + 2], c;
+#else
+  int            l;
+#endif
   
   if (json_socket > -1) {
 
+#if UDP_BUFFER_SIZE
+    while (*json) {
+
+      udp_buffer[index++] = c = (uint8_t) *json++;
+
+      if ((c     == 0x0a)||
+          (c     == 0x0d)||
+          (index >= UDP_BUFFER_SIZE)){
+
+        udp_buffer[index] = 0;
+
+        if ((status = sendto(json_socket,udp_buffer,index,0,
+                             (struct sockaddr *) &server,sizeof(server))) < 0) {
+
+          fprintf(stderr,"%s(): %d, %d, %d\n",
+                  __func__,index,status,errno);
+        }
+
+        index = 0;
+        break;
+      }
+    }
+#else
     if ((status = sendto(json_socket,json,l = strlen(json),0,
                          (struct sockaddr *) &server,sizeof(server))) < 0) {
 
       fprintf(stderr,"%s(): %d, %d, %d\n",
               __func__,l,status,errno);
     }
-
+#endif
   } else {
 
-    printf("%s", json);
+    fputs(json,stdout);
   }
 
   return 0;

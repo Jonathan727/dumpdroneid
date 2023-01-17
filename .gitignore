@@ -1,8 +1,29 @@
 # runtime data output
 /data
+#rid_capture debug file
+debug.txt
+#generated library makefile
+/radiotap-library/Makefile
 
 # build output
 /rid_capture
+/bluez_sniffer
+/nrf_sniffer
+
+# Cmake
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+cmake-build*
+.cmake
 
 # Prerequisites
 *.d

@@ -22,7 +22,8 @@
  * To do:
  *
  * Check units.
- * The history/track doesn't work.
+ * I don't know how FA does the tracks, it doesn't seem to use the history files.
+ * It doesn't seem worth bothering with the history files.
  *
  *
  */
@@ -42,7 +43,8 @@
 #include "rid_capture.h"
 
 #define FA_HISTORY    1
-#define SQUAWK     1200 // UK VFR is 7000
+#define FA_RECEIVER   0
+#define SQUAWK     7000 // VFR, 7000 in Europe, 1200 in North America.
 
 /*
  *
@@ -52,19 +54,27 @@ extern uid_t        nobody;
 extern gid_t        nogroup;
 extern const mode_t file_mode, dir_mode;
 
-static char    fa_dir[] = "data"; 
-#if FA_HISTORY
-static double  base_lat = 52.0 + (46.0 / 60.0) + (49.89 / 3600.0),
-               base_lon =  0.0 - (42.0 / 60.0) - (26.26 / 3600.0);
+#if FA_EXPORT
+
+static char    fa_dir[] = "data";
+#if FA_RECEIVER || FA_HISTORY
+static double  base_lat = 52.0 + (46.0 / 60.0) + (49.89 / 3600.0), // BMFA
+               base_lon =  0.0 - (42.0 / 60.0) - (26.26 / 3600.0); // Buckminster
+
+static void    write_receiver(long int);
+#endif
+
 #endif
 
 /*
  *
  */
 
+#if FA_EXPORT
+
 int fa_export(time_t secs,struct UAV_RID *RID_data) {
 
-  int                uav, j, alt_geo, alt_baro, alt_agl, speed, heading, seen, rssi = -50;
+  int                uav, j, alt_geo, alt_baro, alt_agl, speed_h, speed_v, heading, seen, rssi = -50;
   char               filename[128];
   double             mach;
   unsigned long int  total;
@@ -82,6 +92,9 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
     mkdir(fa_dir,dir_mode);
     chmod(fa_dir,dir_mode);
     chown(fa_dir,nobody,nogroup);
+#if FA_RECEIVER
+    write_receiver(0);
+#endif
   }
 
   sprintf(filename,"%s/aircraft.json",fa_dir);
@@ -103,19 +116,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
     sprintf(filename2,"%s/history_%ld.json",fa_dir,next_history);
     rename(filename,filename2);
 
-    sprintf(filename2,"%s/receiver.json",fa_dir);
-
-    if (output = fopen(filename2,"w")) {
-
-      chmod(filename2,file_mode);
-
-      fprintf(output,"{ \"version\" : \"\", \"refresh\" : 1000, \"history\" : %ld, ",
-              next_history);
-      fprintf(output," \"lat\" : %.4f, \"lon\" : %.4f }\n",
-              base_lat,base_lon);
-      
-      fclose(output);
-    }
+    write_receiver(next_history);
 
     ++next_history;
   }
@@ -128,6 +129,8 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
     if (nobody) {
       chown(filename,nobody,nogroup);
     }
+
+    //https://github.com/wiedehopf/readsb/blob/dev/README-json.md
 
     for (uav = 0, total = 0; uav < MAX_UAVS; ++uav) {
       total += RID_data[uav].packets;
@@ -149,10 +152,15 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         }
 
         fputs("    {",output);
- 
-        fprintf(output, " \"hex\":\"~%02x:%02x:%02x:%02x:%02x:%02x\"",
-                RID_data[uav].mac[0],RID_data[uav].mac[1],RID_data[uav].mac[2],
-                RID_data[uav].mac[3],RID_data[uav].mac[4],RID_data[uav].mac[5]);
+
+#if 0 // Use unused hex codes.
+        fprintf(output, " \"hex\":\"%06x\"",uav + 1);
+#else // Use the MAC.
+        uint8_t * mac = RID_data[uav].mac;
+
+        fprintf(output, " \"hex\":\"~%02x%02x%02x%02x%02x%02x\"",
+                mac[0],mac[1],mac[2],mac[3],mac[4],mac[5]);
+#endif
         fprintf(output,", \"type\":\"other\"");
         fprintf(output,", \"flight\":\"%s\"",RID_data[uav].odid_data.BasicID->UASID);
         // fprintf(output,", \"squawk\":\"%04d\"",SQUAWK);
@@ -160,18 +168,43 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         alt_geo  = (int) (RID_data[uav].odid_data.Location.AltitudeGeo     * 3.28084); /* m   -> ft */
         alt_baro = (int) (RID_data[uav].odid_data.Location.AltitudeBaro    * 3.28084); /* m   -> ft */
         alt_agl  = (int) (RID_data[uav].odid_data.Location.Height    * 3.28084); /* m   -> ft */ //TODO: check Height Type
-        speed   = (int) (RID_data[uav].odid_data.Location.SpeedHorizontal * 1.94384); /* m/s -> knots */
-        mach    = RID_data[uav].odid_data.Location.SpeedHorizontal / 300.0;
+        mach    = RID_data[uav].odid_data.Location.SpeedHorizontal / 340.0;
         seen    = (int) (secs - RID_data[uav].last_rx);
         rssi    = (RID_data[uav].rssi) ? RID_data[uav].rssi: -50;
 
-        if ((heading = (int) (RID_data[uav].odid_data.Location.Direction)) > 180) {
-          heading -= 360;
+        // if ((heading = (int) (RID_data[uav].odid_data.Location.Direction)) > 180) {
+          // heading -= 360;
+        // }
+
+        speed_h = (RID_data[uav].odid_data.Location.SpeedHorizontal < (float) INV_SPEED_H) ?
+                  (int) (RID_data[uav].odid_data.Location.SpeedHorizontal * 1.94384):      /* m/s -> knots */
+                  0;
+        speed_v = (RID_data[uav].odid_data.Location.SpeedVertical < (float) INV_SPEED_V) ?
+                  (int) (RID_data[uav].odid_data.Location.SpeedVertical * 3.28084 * 60.0): /* m/s -> ft/m */
+                  0;
+
+        if (RID_data[uav].odid_data.Location.AltitudeBaro > INV_ALT) {
+
+          fprintf(output,", \"alt_baro\":%d",
+                  (int) (RID_data[uav].odid_data.Location.AltitudeBaro * 3.28084));
         }
-        
-        fprintf(output,", \"alt_geom\":%d, \"alt_baro\":%d",alt_geo,alt_agl);//change to alt_baro with alt_ago failback
-        fprintf(output,", \"gs\":%d, \"ias\":%d, \"tas\":%d, \"mach\":%.3f",speed,speed,speed,mach);
-        fprintf(output,", \"track\":%d",heading);
+
+        if (RID_data[uav].odid_data.Location.AltitudeGeo > INV_ALT) {
+
+          fprintf(output,", \"alt_geom\":%d",
+                  (int) (RID_data[uav].odid_data.Location.AltitudeGeo * 3.28084));
+        }
+
+        fprintf(output,", \"geom_rate\":%d",speed_v);
+        fprintf(output,", \"gs\":%d, \"ias\":%d, \"tas\":%d, \"mach\":%.3f",speed_h,speed_h,speed_h,mach);
+        // fprintf(output,", \"track\":%d",heading);
+
+        if (RID_data[uav].odid_data.Location.Direction < INV_DIR) {
+
+          fprintf(output,", \"track\":%d",
+                  (int) (RID_data[uav].odid_data.Location.Direction));
+        }
+
         fprintf(output,", \"lat\":%.6f, \"lon\":%.6f",
                 RID_data[uav].odid_data.Location.Latitude,
                 RID_data[uav].odid_data.Location.Longitude);
@@ -183,7 +216,7 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
         fprintf(output,", \"messages\":%u",RID_data[uav].packets);
         fprintf(output,", \"seen_pos\":%d, \"seen\":%d",seen,seen);
 
-         /* FA uses RSSI as a indication that we are providing a position. */
+         /* If we don't provide an RSSI, FA doesn't think that we are providing a position. */
         fprintf(output,", \"rssi\":%d",rssi);
 
         fputs(" }",output);
@@ -202,9 +235,38 @@ int fa_export(time_t secs,struct UAV_RID *RID_data) {
   return 0;
 }
 
+#endif
+
 /*
  *
  */
+
+#if FA_RECEIVER || FA_HISTORY
+
+void write_receiver(long int history) {
+
+  char  filename2[128];
+  FILE *output;
+
+  sprintf(filename2,"%s/receiver.json",fa_dir);
+
+  if (output = fopen(filename2,"w")) {
+
+    chmod(filename2,file_mode);
+    chown(filename2,nobody,nogroup);
+
+    fprintf(output,"{ \"version\" : \"\", \"refresh\" : 1000, \"history\" : %ld, ",
+            history);
+    fprintf(output," \"lat\" : %.4f, \"lon\" : %.4f }\n",
+            base_lat,base_lon);
+
+    fclose(output);
+  }
+
+  return;
+}
+
+#endif
 
 /*
  *

@@ -25,13 +25,13 @@ exit_on_error() {
 # see https://github.com/aircrack-ng/rtl8812au
 # see https://wireless.wiki.kernel.org/en/users/documentation/iw
 
-use_ifconfig=${use_ifconfig:=no}
+USE_IF_CONFIG=${USE_IF_CONFIG:=no}
 
 if [ $# -eq 0 ]
   then
     #Just output current devices
     echo "No Device Specified - Showing Current Wireless Config"
-    if [[ $use_ifconfig == yes ]]
+    if [[ $USE_IF_CONFIG == yes ]]
       then
         iwconfig
       else
@@ -49,7 +49,7 @@ if [ "$(id -u)" != "0" ]; then
     exit 1
 fi
 
-if [[ $use_ifconfig == yes ]]
+if [[ $USE_IF_CONFIG == yes ]]
   then
     echo "using ifconfig/iwconfig"
     ifconfig $1 down
@@ -67,7 +67,7 @@ fi
 
 
 echo "Monitor mode enabled for $1"
-if [[ $use_ifconfig == yes ]]
+if [[ $USE_IF_CONFIG == yes ]]
   then
     iwconfig $1
   else
@@ -78,3 +78,7 @@ fi
 #sudo tshark --interface wlan1 --monitor-mode -f "broadcast or multicast"
 #sudo airodump-ng --beacons --ht20 --channel 6  wlan1 
 #sudo airodump-ng --beacons --ht20 --channel 6 -w wlan12022-12-21.pcap --output-format pcap,logcsv  wlan1
+#sudo tcpdump -vv -i wlan1 -e -XX type mgt subtype beacon
+#https://miloserdov.org/?p=337
+#sudo iw reg get
+#sudo iw reg set US

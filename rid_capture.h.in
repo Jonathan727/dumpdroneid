@@ -11,25 +11,25 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include "opendroneid-core-c/libopendroneid/opendroneid.h"
+#include "opendroneid.h"
 
-#define VERSION        0.95
+#define VERSION        ${VERSION}
 
 /* BLE, choose one. */
-#define BLUEZ_SNIFFER  0 /* Linux standard Bluetooth stack. */
-#define NRF_SNIFFER    0 /* nRF52840 dongle running nRF's sniffer program. */
+#define BLUEZ_SNIFFER  ${bluez_sniffer} /* Linux standard Bluetooth stack. */
+#define NRF_SNIFFER    ${nrf_sniffer} /* nRF52840 dongle running nRF's sniffer program. */
 
 /* WiFi */
-#define ENABLE_PCAP    1
+#define ENABLE_PCAP    ${enable_pcap}
 
 /* Protocols */
-#define ID_FRANCE      0
+#define ID_FRANCE      ${id_france}
 
 /* Outputs and analysis */
-#define FA_EXPORT      1 /* FlightAware format.                  */
-#define ASTERIX        0 /* Eurocontrol ASTERIX cat. 129 format. */
-#define VERIFY         0 /* For investigating auth messages.     */
-#define USE_CURSES     0 /* For testing, displays should use the UDP output. */
+#define FA_EXPORT      ${fa_export} /* FlightAware format.                  */
+#define ASTERIX        ${asterix} /* Eurocontrol ASTERIX cat. 129 format. */
+#define VERIFY         ${verify} /* For investigating auth messages.     */
+#define USE_CURSES     ${use_curses} /* For testing, displays should use the UDP output. */
 
 #define MAX_UAVS      20
 
