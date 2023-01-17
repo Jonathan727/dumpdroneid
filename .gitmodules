@@ -1,3 +1,6 @@
 [submodule "radiotap-library"]
 	path = radiotap-library
 	url = https://github.com/Jonathan727/radiotap-library
+[submodule "opendroneid-core-c"]
+	path = opendroneid-core-c
+	url = https://github.com/opendroneid/opendroneid-core-c.git
