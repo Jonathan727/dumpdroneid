@@ -44,6 +44,9 @@ endif()
 if(NOT EXISTS "${PROJECT_SOURCE_DIR}/radiotap-library/CMakeLists.txt")
   message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
 endif()
+if(NOT EXISTS "${PROJECT_SOURCE_DIR}/opendroneid-core-c/CMakeLists.txt")
+  message(FATAL_ERROR "The submodules were not downloaded! GIT_SUBMODULE was turned off or failed. Please update submodules and try again.")
+endif()
 
 #
 configure_file(rid_capture.h.in rid_capture.h)
