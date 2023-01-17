@@ -79,3 +79,6 @@ fi
 #sudo airodump-ng --beacons --ht20 --channel 6  wlan1 
 #sudo airodump-ng --beacons --ht20 --channel 6 -w wlan12022-12-21.pcap --output-format pcap,logcsv  wlan1
 #sudo tcpdump -vv -i wlan1 -e -XX type mgt subtype beacon
+#https://miloserdov.org/?p=337
+#sudo iw reg get
+#sudo iw reg set US
