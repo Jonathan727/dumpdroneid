@@ -94,9 +94,11 @@ if(${enable_pcap})
   set(rcap_libraries radiotap ${rcap_libraries})
 endif()
 
+set(rcap_libraries opendroneid ${rcap_libraries})
+
+add_subdirectory(opendroneid-core-c/libopendroneid)
 add_subdirectory(radiotap-library)
 
-set(rid_capture_source ${rid_capture_source} opendroneid.c)
 
 add_executable(rid_capture
   ${rid_capture_source})

@@ -11,7 +11,7 @@
 #include <stdint.h>
 #include <sys/types.h>
 
-#include "opendroneid.h"
+#include "opendroneid-core-c/libopendroneid/opendroneid.h"
 
 #define VERSION        0.95
 
