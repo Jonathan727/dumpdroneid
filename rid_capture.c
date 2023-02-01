@@ -782,8 +782,8 @@ void packet_handler(u_char *args,const struct pcap_pkthdr *header,const u_char *
       len =  payload[offset + 1];
       val = &payload[offset + 2];
 
-      if ((typ    == 0xdd)&&
-          (val[0] == 0xfa)&& // ODID
+      if ((typ    == 0xdd)&& // 221 Tag Vendor Specific
+          (val[0] == 0xfa)&& // asd_stan_oui[3] = { 0xFA, 0x0B, 0xBC };
           (val[1] == 0x0b)&&
           (val[2] == 0xbc)) {
 
